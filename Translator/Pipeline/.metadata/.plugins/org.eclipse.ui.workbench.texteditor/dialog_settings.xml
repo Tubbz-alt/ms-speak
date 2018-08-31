@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="org.eclipse.ui.texteditor.FindReplaceDialog_dialogBounds">
+		<item value="295" key="DIALOG_WIDTH"/>
+		<item value="8" key="DIALOG_Y_ORIGIN"/>
+		<item value="813" key="DIALOG_HEIGHT"/>
+		<item value="1161" key="DIALOG_X_ORIGIN"/>
+		<item value="1|Cantarell|11.0|0|GTK|1|" key="DIALOG_FONT_NAME"/>
+	</section>
+	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
+		<item value="true" key="wrap"/>
+		<item value="false" key="isRegEx"/>
+		<item value="true" key="casesensitive"/>
+		<item value="false" key="incremental"/>
+		<item value="true" key="wholeword"/>
+		<item value="Forwarded Request, Waiting " key="selection"/>
+		<list key="findhistory">
+			<item value="Forwarded Request, Waiting "/>
+			<item value="Forwarded Response, Waiting for new R"/>
+			<item value="doValid8"/>
+			<item value="true"/>
+			<item value="xmlInData"/>
+			<item value="mValid8v3First"/>
+			<item value="UpdateLogStats"/>
+			<item value="m1stMsgType"/>
+		</list>
+		<list key="replacehistory">
+			<item value="httpStatusCode"/>
+			<item value="PFailCnt"/>
+			<item value="VFailCnt"/>
+			<item value="mdErr"/>
+			<item value="reqrspCnt"/>
+			<item value=" 0"/>
+			<item value="GlobalStuff.isValidPublicIp"/>
+			<item value="GlobalStuff.getAddress"/>
+		</list>
+	</section>
+</section>

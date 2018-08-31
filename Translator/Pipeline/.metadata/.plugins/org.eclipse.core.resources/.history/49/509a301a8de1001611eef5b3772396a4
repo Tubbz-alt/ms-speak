@@ -1,0 +1,1391 @@
+import java.io.*;
+import java.net.*;
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.StringTokenizer;
+import java.util.logging.FileHandler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+
+import org.apache.commons.cli.*;
+//import java.util.Arrays;
+
+import pnl.valid.JValid;
+
+class GlobalStuff {
+	private static int m_dbgLevel = 0;
+	private static int m_threadcnt = 0;
+	private static boolean m_wait = false;
+	private static boolean m_EmuV5Srvr = false;
+	private static Logger logger;
+
+	public static int m_TotalRequests = 0;
+	public static int m_TotalResponses = 0;
+	public static int m_ReqValidateFailed = 0;
+	public static int m_RespValidateFailed = 0;
+	public static int m_ReqTranslateFailed = 0;
+	public static int m_RespTranslateFailed = 0;
+
+	public static Logger getLogger() {
+		return logger;
+	}
+
+	public static void setLogger(Logger var) {
+		logger = var;
+	}
+
+	public static int getDebugLevel() {
+		return m_dbgLevel;
+	}
+
+	public static void setDebugLevel(int var) {
+		m_dbgLevel = var;
+	}
+
+	public static int getThreadCnt() {
+		return m_threadcnt;
+	}
+
+	public static void setThreadCnt(int var) {
+		m_threadcnt = var;
+	}
+
+	public static boolean getWait() {
+		return m_wait;
+	}
+
+	public static void setWait(boolean val) {
+		m_wait = val;
+	}
+
+	public static boolean EmuV5Srvr() {
+		return m_EmuV5Srvr;
+	}
+
+	public static void EmuV5Srvr(boolean val) {
+		m_EmuV5Srvr = val;
+	}
+
+	public final static void clearConsole() {
+		try {
+			final String os = System.getProperty("os.name");
+
+			if (os.contains("Windows")) {
+				Runtime.getRuntime().exec("cls");
+			} else {
+				Runtime.getRuntime().exec("clear");
+			}
+		} catch (final Exception e) {
+			// Handle any exceptions.
+		}
+	}
+}
+
+/*
+ * PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"; Formatter to produce output like
+ * this: 2016-08-19T17:43:14.295+09:00 INFO Hey~ 2016-08-19T17:43:16.068+09:00
+ * SEVERE Seriously? 2016-08-19T17:43:16.068+09:00 WARNING I'm warning you!!!
+ */
+class JabbaFormatter extends SimpleFormatter {
+	private static final String PATTERN = "yyyy-MM-dd HH:mm:ss";
+
+	@Override
+	public String format(final LogRecord record) {
+		return String.format("%1$s %2$-7s %3$s\n",
+				new SimpleDateFormat(PATTERN).format(new Date(record
+						.getMillis())), record.getLevel().getName(),
+				formatMessage(record));
+	}
+}
+
+class JabbaRuntimeException extends RuntimeException {
+	private int status;
+	private static final long serialVersionUID = -724970790805990517L;
+
+	public JabbaRuntimeException(String message, int status) {
+		super(message);
+		this.status = status;
+	}
+
+	public JabbaRuntimeException(String message, int status, Throwable cause) {
+		super(message, cause);
+		this.status = status;
+	}
+
+	@Override
+	public String toString() {
+		return super.toString();
+	}
+
+	@Override
+	public String getMessage() {
+		return super.getMessage() + ", returning Http Status:" + status;
+	}
+
+	public int getStatus() {
+		return status;
+	}
+}
+
+public class JabbaPipe {
+
+	private static boolean isValidPublicIp(InetAddress iNetAddr) {
+		if (iNetAddr instanceof Inet6Address)
+			System.out.println("Address is a V6 IP");
+
+		/*
+		 * try { String ip = iNetAddr.getHostAddress(); address =
+		 * InetAddress.getByName(ip); } catch (UnknownHostException exception) {
+		 * return false; // assuming no logging, exception handling required }
+		 */
+		return !(iNetAddr.isSiteLocalAddress() || iNetAddr.isAnyLocalAddress()
+				|| iNetAddr.isLinkLocalAddress()
+				|| iNetAddr.isLoopbackAddress() || iNetAddr
+					.isMulticastAddress());
+	}
+
+	/*
+	 * isSiteLocalAddress: For an Inet4Address, it checks to see if it's one of
+	 * the RFC1918 "unrouteable" addresses: 10.0.0.0/8, 172.16.0.0/12,
+	 * 192.168.0.0/16. For an Inet6Address, it checks the first two octets to
+	 * see if it's a real "site local" address.
+	 */
+	private static InetAddress getAddress(String ipType) {
+		try {
+			int getPub = 0;
+			if (ipType == "Public")
+				getPub = 1;
+			else if (ipType == "LoopBack")
+				getPub = 2;
+
+			Enumeration<NetworkInterface> eNI = NetworkInterface
+					.getNetworkInterfaces();
+			while (eNI.hasMoreElements()) {
+				NetworkInterface NI = (NetworkInterface) eNI.nextElement();
+				Enumeration<InetAddress> eNetAddr = NI.getInetAddresses();
+				while (eNetAddr.hasMoreElements()) {
+					InetAddress iNetAddr = (InetAddress) eNetAddr.nextElement();
+					if (iNetAddr instanceof Inet6Address) {
+						// System.out.println("IPv6 Addr: " +
+						// iNetAddr.getHostAddress());
+						continue;
+					} else if (iNetAddr instanceof Inet4Address) {
+						// System.out.println("IPv4 Addr: " +
+						// iNetAddr.getHostAddress());
+						;
+					} else {
+						System.out.println("What the ....?");
+					}
+
+					if (getPub == 1) {
+						if (isValidPublicIp(iNetAddr)) {
+							// System.out.println("--->isValidPublicIp");
+							return iNetAddr;
+						}
+						if (iNetAddr.isSiteLocalAddress()) {
+							// System.out.println("--->isSiteLocalAddress");
+							return iNetAddr;
+						}
+					} else {
+						if ((getPub == 2) && iNetAddr.isLoopbackAddress()) {
+							// System.out.println("--->isLoopbackAddress");
+							return iNetAddr;
+						} else if ((getPub == 0)
+								&& iNetAddr.isSiteLocalAddress()) {
+							// System.out.println("--->local, non-loopback ");
+							return iNetAddr;
+						}
+					}
+					/*
+					 * for ( InterfaceAddress eNIaddr :
+					 * NI.getInterfaceAddresses()){ if (
+					 * eNIaddr.getAddress().isSiteLocalAddress() ) return
+					 * eNIaddr.getAddress(); }
+					 */
+				}
+			}
+		} catch (SocketException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	public static void main(String[] args) throws Exception {
+		String LOOP_BIND_IP = "127.0.0.1"; // The default IP address to bind to
+											// for listening for Request traffic
+		String LOOP_DESTINATION_HOST = "127.0.0.1"; // IP address to forward
+													// Response traffic to
+		String DEF_BIND_IP = "0.0.0.0"; // The default IP address to bind to for
+										// listening for Request traffic
+		int LOOP_PIPELINE_PORT = 7776; // The port to listen on for Request
+										// traffic
+		int REQ_PIPELINE_PORT = 8080; // The port to listen on for Request
+										// traffic
+		int FWD_PIPELINE_PORT = 7777; // IP port to forward Response traffic to
+
+		GlobalStuff.setLogger(Logger.getLogger("JabbaLog"));
+		Logger logger = GlobalStuff.getLogger();
+		FileHandler fh;
+
+		try {
+			// This block configure the logger with handler and formatter
+			fh = new FileHandler("Jabba.log", true); // note: 'true' tells it to
+														// append
+			logger.addHandler(fh);
+
+			// configure logger to print on one line
+			System.setProperty("java.util.logging.SimpleFormatter.format",
+					"%1$tF %1$tT %4$s %2$s %5$s%6$s%n");
+			// SimpleFormatter formatter = new SimpleFormatter();
+			JabbaFormatter formatter = new JabbaFormatter();
+			fh.setFormatter(formatter);
+
+			// the following statement is used to log any messages
+			logger.setLevel(Level.ALL);
+			logger.info("\n ******* Jabba Started. *******");
+			/*
+			 * logger.severe(" ******* This is a severe message. *******");
+			 * logger.warning(" ******* This is a warning message. *******");
+			 * logger.config(" ******* This is a config message. *******");
+			 * logger.fine(" ******* This is a fine message. *******");
+			 * logger.finer(" ******* This is a finer message. *******");
+			 * logger.finest(" ******* This is the finest message. *******");
+			 */
+
+			/*
+			 * To remove the console handler, use
+			 * logger.setUseParentHandlers(false); since the ConsoleHandler is
+			 * registered with the parent logger from which all the loggers
+			 * derive.
+			 * 
+			 * ConsoleHandler handler = new ConsoleHandler(); // PUBLISH this
+			 * level handler.setLevel(Level.FINER); logger.addHandler(handler);
+			 * 
+			 * The levels in descending order are: SEVERE (highest value)
+			 * WARNING INFO CONFIG FINE FINER FINEST (lowest value) In addition
+			 * there is a level OFF that can be used to turn off logging, and a
+			 * level ALL that can be used to enable logging of all messages.
+			 * logger.severe("..."); logger.warning("...");
+			 * logger.config("..."); logger.fine("..."); logger.finer("...");
+			 * logger.finest("...");
+			 * 
+			 * seems as though only INFO and WARNING get written to console.
+			 * java.util.logging has a root logger that defaults to Level.INFO,
+			 * and a ConsoleHandler attached to it that also defaults to
+			 * Level.INFO. FINE is lower than INFO, so fine messages are not
+			 * displayed by default.
+			 */
+		} catch (SecurityException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		InetAddress PublicIp = getAddress("Public");
+		if (PublicIp == null) {
+			logger.severe("Failed to Find a Public IP.");
+			System.exit(1);
+			return;
+		}
+
+		System.setProperty("java.net.preferIPv4Stack", "true");
+		InetAddress LoopBackIp = getAddress("LoopBack");
+		if (LoopBackIp == null) {
+			logger.warning("Failed to Find a LoopBackIp IP, using localhost.");
+			// InetAddress.getLocalHost();
+			LoopBackIp = Inet4Address.getLocalHost();
+		}
+		logger.info("Public IP of system is: " + PublicIp.getHostAddress());
+		// logger.info("***LoopBack IP of system is: "+
+		// LoopBackIp.getHostAddress() + "\n" );
+
+		String DEF_DESTINATION_HOST = LoopBackIp.getHostAddress();
+		// InetAddress IP=InetAddress.getLocalHost(); // 127.0.1.1
+
+		Options options = new Options();
+
+		String desc = "IP Address to bind to for listening for Request traffic (default: "
+				+ DEF_BIND_IP + " )";
+		Option ReqBindIp = new Option("ReqIp", true, desc);
+		ReqBindIp.setRequired(false);
+		options.addOption(ReqBindIp);
+
+		desc = "The port to listen on for Request traffic (default: "
+				+ REQ_PIPELINE_PORT + " )";
+		Option ReqPort = new Option("ReqPort", true, desc);
+		ReqPort.setRequired(false);
+		options.addOption(ReqPort);
+
+		desc = "IP Address to forward Request to (default: "
+				+ DEF_DESTINATION_HOST + " )";
+		Option FwdIp = new Option("FwdIp", true, desc);
+		FwdIp.setRequired(false);
+		options.addOption(FwdIp);
+
+		desc = "IP port to forward Request to (default: " + FWD_PIPELINE_PORT
+				+ " )";
+		Option FwdPort = new Option("FwdPort", true, desc);
+		FwdPort.setRequired(false);
+		options.addOption(FwdPort);
+
+		desc = "Use Loopback mode (default: False )";
+		Option LoopBack = new Option("L", "LoopBack", false, desc); // .hasArg(false);
+		LoopBack.setRequired(false);
+		options.addOption(LoopBack);
+
+		desc = "Wait for User Input to Continue (default: False )";
+		Option waitOpt = new Option("w", "Wait", false, desc); // .hasArg(false);
+		waitOpt.setRequired(false);
+		options.addOption(waitOpt);
+
+		desc = "Emulate Response Server (default: False )";
+		Option emuOpt = new Option("e", "Emu", false, desc); // .hasArg(false);
+		emuOpt.setRequired(false);
+		options.addOption(emuOpt);
+
+		desc = "Use Public Server IP (default: 0.0.0.0 )";
+		Option PubOpt = new Option("P", "Pub", false, desc); // .hasArg(false);
+		PubOpt.setRequired(false);
+		options.addOption(PubOpt);
+
+		desc = "Debug Level (default: 0 )";
+		Option dbgLevel = new Option("d", "dbgLevel", true, desc);
+		dbgLevel.setRequired(false);
+		options.addOption(dbgLevel);
+
+		// options.addOption(OptionBuilder.withLongOpt("help").create('h'));
+		Option helpoption = Option.builder("h").longOpt("help")
+				.desc("usage help").hasArg(false).argName("hlp").build();
+		options.addOption(helpoption);
+
+		HelpFormatter formatter = new HelpFormatter();
+		String header = "Send MS packets and translate them.\n\n";
+		String footer = "\nPlease report issues at www.pnnl.gov/givethemtowill";
+
+		CommandLine cmd;
+		CommandLineParser parser = new DefaultParser();
+
+		try {
+			cmd = parser.parse(options, args);
+		} catch (ParseException e) {
+			logger.severe(e.getMessage());
+			formatter.printHelp("JabbaPipe", header, options, footer, true);
+			System.exit(1);
+			return;
+		}
+		if (cmd.hasOption("h")) {
+			formatter.printHelp("JabbaPipe", header, options, footer, true);
+			System.exit(1);
+			return;
+		}
+
+		String BIND_IP;
+		String FWD_IP;
+		String PIPELINE_PORT = cmd.getOptionValue("ReqPort");
+		if (cmd.hasOption("L")) {
+			BIND_IP = LOOP_BIND_IP;
+			FWD_IP = LOOP_DESTINATION_HOST;
+			LOOP_PIPELINE_PORT = 7776; // The port to listen on for Request
+										// inbound traffic
+			if (PIPELINE_PORT != null)
+				REQ_PIPELINE_PORT = Integer.parseInt(PIPELINE_PORT);
+			else
+				REQ_PIPELINE_PORT = LOOP_PIPELINE_PORT;
+		} else {
+			BIND_IP = cmd.getOptionValue("ReqIp");
+			if (BIND_IP == null) {
+				if (cmd.hasOption("P")) {
+					BIND_IP = PublicIp.getHostAddress();
+				} else {
+					BIND_IP = DEF_BIND_IP;
+				}
+			}
+			FWD_IP = cmd.getOptionValue("FwdIp");
+			if (FWD_IP == null)
+				FWD_IP = DEF_DESTINATION_HOST;
+			if (PIPELINE_PORT != null)
+				REQ_PIPELINE_PORT = Integer.parseInt(PIPELINE_PORT);
+		}
+
+		String FWD_PORT = cmd.getOptionValue("FwdPort");
+		if (FWD_PORT != null)
+			FWD_PIPELINE_PORT = Integer.parseInt(FWD_PORT);
+
+		boolean Wait = false;
+		if (cmd.hasOption("Wait"))
+			Wait = true;
+		GlobalStuff.setWait(Wait);
+
+		boolean Emulate = false;
+		if (cmd.hasOption("Emu"))
+			Emulate = true;
+		GlobalStuff.EmuV5Srvr(Emulate);
+
+		int dbglev = 0;
+		if (cmd.hasOption("dbgLevel")) {
+			String Debug_Level = cmd.getOptionValue("dbgLevel");
+			dbglev = Integer.parseInt(Debug_Level);
+		}
+		GlobalStuff.setDebugLevel(dbglev);
+
+		PipelineServer thePipelineServer = new PipelineServer(BIND_IP,
+				REQ_PIPELINE_PORT, FWD_IP, FWD_PIPELINE_PORT);
+		// thePipelineServer.run( "v3v5_mr_PingUR.xsl",
+		// "v5v3_mr_PingURLResponse.xsl" );
+		thePipelineServer.run("./xslt/ms_msg.xslt", "./xslt/ms_msg.xslt");
+	}
+
+	// @SuppressWarnings("unchecked")
+	public String run(String xsltFile, String xmlData) throws Exception {
+		Logger logger = GlobalStuff.getLogger();
+
+		String result = null;
+
+		URL[] saxload = {
+				new URL(
+						"file:///home/carl/Pipeline/JabbaPipe/lib/XMLConverters.jar"),
+				new URL("file:///home/carl/Pipeline/JabbaPipe/lib/saxonsa.jar"),
+				new URL("file://.lib/commons-cli-1.3.1.jar") };
+		ClassLoader saxucl = URLClassLoader.newInstance(saxload);
+		Class<?> saxclv = saxucl
+				.loadClass("com.ddtek.xmlconverter.ConverterFactory");
+		Class<?> xxclv = saxucl
+				.loadClass("net.sf.saxon.TransformerFactoryImpl");
+		com.ddtek.xmlconverter.ConverterFactory cFactory = (com.ddtek.xmlconverter.ConverterFactory) saxclv
+				.newInstance();
+
+		TransformerFactory tFactory = (TransformerFactory) xxclv.newInstance();
+		;
+		// ConverterFactory cFactory = new ConverterFactory();
+		// TransformerFactory tFactory= new
+		// net.sf.saxon.TransformerFactoryImpl();
+
+		com.ddtek.xmlconverter.ConverterResolver resolver = cFactory
+				.newResolver();
+		tFactory.setAttribute(net.sf.saxon.lib.FeatureKeys.VERSION_WARNING,
+				new Boolean(false));
+		tFactory.setURIResolver(resolver);
+
+		// Declares for XSLT node XSLTOperator
+		System.out.println("Translating Data...\n");// + xmlData + "\n" );
+		try {
+			StringReader reader = new StringReader(xmlData);
+			StringWriter writer = new StringWriter();
+			// tFactory = TransformerFactory.newInstance();
+			tFactory = (TransformerFactory) xxclv.newInstance();
+			Transformer transformer = tFactory
+					.newTransformer(new javax.xml.transform.stream.StreamSource(
+							xsltFile));
+
+			transformer.transform(new javax.xml.transform.stream.StreamSource(
+					reader),
+					new javax.xml.transform.stream.StreamResult(writer));
+
+			result = writer.toString();
+			return result;
+		} catch (Exception e) {
+			logger.severe("Exception Raised While Translating Data");
+			logger.severe("Input Data:\n" + xmlData + "\n");
+			// e.printStackTrace();
+			throw new RuntimeException("Translation Exception", e);
+		}
+	}
+
+	// --------------------------- APIs
+	// -------------------------------------------------------------------------
+	// API to allow a program to bind data to the pipeline input ports
+	// @SuppressWarnings("rawtypes")
+	private Hashtable<String, StreamSource> m_pipelineInputs = new Hashtable<String, StreamSource>();
+
+	// @SuppressWarnings("unchecked")
+	public void bindInputObject(String portName, Object obj, Object ignored) {
+
+		if (!(obj instanceof InputStream))
+			throw new IllegalArgumentException(
+					"bindInputObject for inline pipeline code supports only InputStream.");
+
+		m_pipelineInputs.put(portName, new StreamSource((InputStream) obj));
+	}
+
+	// API to allow an program to bind data to the pipeline output ports
+	// @SuppressWarnings("rawtypes")
+	private Hashtable<String, StreamResult> m_pipelineOutputs = new Hashtable<String, StreamResult>();
+
+	// @SuppressWarnings("unchecked")
+	public void bindOutputObject(String portName, Object obj) {
+
+		if (!(obj instanceof OutputStream))
+			throw new IllegalArgumentException(
+					"bindOutputObject for inline pipeline code supports only OutputStream.");
+
+		m_pipelineOutputs.put(portName, new StreamResult((OutputStream) obj));
+	}
+
+}
+
+/**
+ * PipelineServer is a simple TCP bridging software that allows a TCP port on
+ * some host to be transparently forwarded to some other TCP port on some other
+ * host. PipelineServer continuously accepts request connections on the
+ * listening TCP port (source port) and starts a thread (RequesterThread) that
+ * connects to the destination host and starts forwarding the data between the
+ * requester socket and destination socket.
+ */
+class PipelineServer {
+	int BACK_LOG = 8; // "An accumulation, especially of unfinished work or unfilled orders."
+	private ServerSocket m_ServerSocket;
+	private String m_ReqIp;
+	private int m_ReqPort;
+	private String m_FwdIp;
+	private int m_FwdPort;
+
+	public PipelineServer(String ReqIp, int ReqPort, String FwdIp, int FwdPort)
+			throws IOException {
+		m_ServerSocket = null;
+		m_ReqIp = ReqIp;
+		m_ReqPort = ReqPort;
+		m_FwdIp = FwdIp;
+		m_FwdPort = FwdPort;
+	}
+
+	/**
+	 * Starts a socket server then Waits for a Requesting client to connect and
+	 * then spawns a handler(RequesterThread) which creates the pipeline object
+	 * and connects to the destination ResponseServer. After connecting to the
+	 * ResponseServer, 1 ForwarderThread is created to handle data coming from
+	 * the Requester and forwards it to the ResponseServer (RequestForwarder)
+	 * and another ForwarderThread is created to handle data coming from the
+	 * ResponseServer and forwards it to the Requester (ResponseForwarder).
+	 *
+	 */
+	public void run(String v3xsltFile, String v5xsltFile) {
+		Logger logger = GlobalStuff.getLogger();
+		try {
+			InetAddress addr = InetAddress.getByName(m_ReqIp);
+			m_ServerSocket = new ServerSocket(m_ReqPort, BACK_LOG, addr);
+			System.out.println("Pipeline Server at " + m_ReqIp
+					+ " is listening on port " + m_ReqPort + " ...");
+			try {
+				System.out
+						.println("Pipeline Server::Waiting for connection from Request Client....");
+				while (true) {
+					try {
+						Socket requestSocket = m_ServerSocket.accept();
+						RequesterThread requesterThread = new RequesterThread(
+								requestSocket, v3xsltFile, v5xsltFile, m_FwdIp,
+								m_FwdPort);
+						requesterThread.start();
+					} catch (IOException e) {
+						logger.info("Pipeline Server::Error on accept socket!");
+					}
+					System.out
+							.println("Pipeline Server::Waiting for connection from another Request Client....");
+				}
+			} finally {
+				logger.info("Pipeline Server exiting...");
+			}
+		} catch (IOException e) {
+			logger.severe("Pipeline Server::Error on socket creation!");
+		}
+
+		finally {
+			if (m_ServerSocket != null)
+				try {
+					m_ServerSocket.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+		}
+	}
+}
+
+/**
+ * RequesterThread is responsible for starting forwarding between a requesting
+ * client and a responding server. It keeps track of the requester and servers
+ * sockets that are both closed on input/output error during the forwarding. The
+ * forwarding is bidirectional and is performed by two ForwarderThread
+ * instances.
+ */
+class RequesterThread extends Thread {
+	private Socket mRequestSocket;
+	String mv3Xslt;
+	String mv5Xslt;
+	private Socket mResponseSocket;
+	private boolean mForwardingActive = false;
+	private String m_FwdIp;
+	private int m_FwdPort;
+
+	int miDebug = 1;
+
+	public RequesterThread(Socket aRequestSocket, String v3xsltFile,
+			String v5xsltFile, String FwdIp, int FwdPort) {
+		mRequestSocket = aRequestSocket;
+		mv3Xslt = v3xsltFile;
+		mv5Xslt = v5xsltFile;
+		m_FwdIp = FwdIp;
+		m_FwdPort = FwdPort;
+	}
+
+	/**
+	 * Establishes connection to the destination server and starts bidirectional
+	 * forwarding of data between the requester and the server.
+	 */
+	public void run() {
+		InputStream requesterIn; // coming FROM the requester
+		OutputStream requesterOut; // going TO the requester
+		InputStream responderIn = null;
+		OutputStream responderOut = null;
+		int try_num = 0;
+		int BUFFER_SIZE = 0x3FFF;
+		// Logger logger = GlobalStuff.getLogger();
+
+		while (true) {
+			try {
+				if (GlobalStuff.EmuV5Srvr() == false) {
+					// Connect to the destination server
+					System.out
+							.println("RequesterThread::Connecting to the destination server at "
+									+ m_FwdIp + ":" + m_FwdPort + " ...");
+					mResponseSocket = new Socket(m_FwdIp, m_FwdPort);
+					System.out.println("RequesterThread::Connected.");
+
+					// Turn on keep-alive
+					mResponseSocket.setKeepAlive(true);
+					// Obtain server input & output streams
+					responderIn = mResponseSocket.getInputStream();
+					responderOut = mResponseSocket.getOutputStream();
+					mResponseSocket.setReceiveBufferSize(BUFFER_SIZE);
+
+				}
+				// Turn on keep-alive
+				mRequestSocket.setKeepAlive(true);
+				// Obtain request input & output streams
+				requesterIn = mRequestSocket.getInputStream();
+				requesterOut = mRequestSocket.getOutputStream();
+				mRequestSocket.setReceiveBufferSize(BUFFER_SIZE);
+				break;
+			} catch (IOException ioe) // connect will generate a
+										// ConnectionRefused exception if the
+										// remote host is not listening on the
+										// socket
+			{
+				if (try_num <= 16) {
+					try_num = try_num + 1;
+					double seconds_to_wait = Math.min(16, Math.pow(2, try_num));
+					System.err.println("RequesterThread::Failed to connect to "
+							+ m_FwdIp + ":" + m_FwdPort + ", retrying in "
+							+ seconds_to_wait + " seconds...");
+					// use a progressively longer sleep period each request:
+					try {
+						Thread.sleep((long) (seconds_to_wait * 1000));
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				} else {
+					System.err.println("RequesterThread::Failed to connect to "
+							+ m_FwdIp + ":" + m_FwdPort + ", abandoning...");
+					connectionBroken("RequesterThread");
+					return;
+				}
+			}
+		}
+
+		// Start forwarding data between requester and responder
+		ForwarderThread RequestForwarder;
+		mForwardingActive = true;
+		if (GlobalStuff.EmuV5Srvr()) {
+			RequestForwarder = new ForwarderThread(this, true, requesterIn,
+					requesterOut, mv3Xslt, mRequestSocket, requesterOut);
+		} else {
+			RequestForwarder = new ForwarderThread(this, true, requesterIn,
+					responderOut, mv3Xslt, mRequestSocket, requesterOut);
+			ForwarderThread ResponseForwarder = new ForwarderThread(this,
+					false, responderIn, requesterOut, mv5Xslt, mResponseSocket,
+					responderOut);
+			ResponseForwarder.start();
+		}
+		RequestForwarder.start();
+	}
+
+	/**
+	 * Called by some of the forwarding threads to indicate that its socket
+	 * connection is broken and both requester and server sockets should be
+	 * closed. Closing the requester and server sockets causes all threads
+	 * blocked on reading or writing to these sockets to get an exception and to
+	 * finish their execution.
+	 */
+	public synchronized void connectionBroken(String tId) {
+		// Logger logger = GlobalStuff.getLogger();
+		try {
+			mResponseSocket.close();
+		} catch (Exception e) {
+		}
+
+		try {
+			mRequestSocket.close();
+		} catch (Exception e) {
+		}
+
+		if (mForwardingActive) {
+			if (miDebug >= 2) {
+				System.out.println("RequesterThread::TCP Forwarding "
+						+ mRequestSocket.getInetAddress().getHostAddress()
+						+ ":" + mRequestSocket.getPort() + " <--> "
+						+ mResponseSocket.getInetAddress().getHostAddress()
+						+ ":" + mResponseSocket.getPort() + " stopped.");
+			}
+			mForwardingActive = false;
+		}
+	}
+}
+
+/**
+ * ForwarderThread handles the TCP forwarding between a socket input stream
+ * (source) and a socket output stream (dest). It reads the input stream and
+ * forwards everything to the output stream. If some of the streams fails, the
+ * forwarding stops and the parent is notified to close all its sockets.
+ */
+class ForwarderThread extends Thread {
+	RequesterThread mReqParent;
+	boolean mIsRequestForwarder;
+	InputStream mInputStream;
+	OutputStream mOutputStream;
+	OutputStream mReplyStream;
+	Socket mSocket;
+	String mXsltFile;
+	JabbaPipe mPipeline;
+	int mCnt;
+	String mId;
+
+	/**
+	 * Creates a new traffic redirection thread specifying its parent, input
+	 * stream and output stream.
+	 */
+	public ForwarderThread(RequesterThread aParent, boolean requesterFwd,
+			InputStream aInputStream, OutputStream aOutputStream,
+			String XsltFile, Socket aSocket, OutputStream aReplyStream) {
+		mReqParent = aParent;
+		mIsRequestForwarder = requesterFwd;
+		mInputStream = aInputStream;
+		mOutputStream = aOutputStream;
+		mReplyStream = aReplyStream;
+		mSocket = aSocket;
+		mXsltFile = XsltFile;
+
+		mCnt = GlobalStuff.getThreadCnt();
+		GlobalStuff.setThreadCnt(GlobalStuff.getThreadCnt() + 1);
+		if (mIsRequestForwarder)
+			mId = "RequestIn" + mCnt + "::";
+		else
+			mId = "RequestOut" + mCnt + "::";
+	}
+
+	/**
+	 * Runs the thread. Continuously reads the input stream and writes the read
+	 * data to the output stream. If reading or writing fail, exits the thread
+	 * and notifies the parent about the failure.
+	 */
+	public void run() {
+		int iDebug = 0;
+		/*int iTotalRequests = GlobalStuff.m_TotalRequests;
+		int iTotalResponses = GlobalStuff.m_TotalResponses;
+		int iReqValidateFailed = GlobalStuff.m_ReqValidateFailed;
+		int iRespValidateFailed = GlobalStuff.m_RespValidateFailed;
+		int iReqTranslateFailed = GlobalStuff.m_ReqTranslateFailed;
+		int iRespTranslateFailed = GlobalStuff.m_RespTranslateFailed;*/
+		byte[] buffer = null;
+		char[] cbuffer = null;
+		String xmlInData = null;
+		String xmlOutData = null;
+		String reply = null;
+		Logger logger = GlobalStuff.getLogger();
+		try {
+			iDebug = GlobalStuff.getDebugLevel();
+			/*
+			 * readLine() - Deprecated. This method does not properly convert
+			 * bytes to characters. As of JDK 1.1, the preferred way to read
+			 * lines of text is via the BufferedReader.readLine() method.
+			 * Programs that use the DataInputStream class to read lines can be
+			 * converted to use the BufferedReader class by replacing code of
+			 * the form: DataInputStream d = new DataInputStream(in); with:
+			 * BufferedReader d = new BufferedReader(new InputStreamReader(in));
+			 */
+			BufferedReader bIn = new BufferedReader(new InputStreamReader(
+					mInputStream));
+			DataOutputStream dOut = new DataOutputStream(mOutputStream);
+			DataOutputStream dReply = new DataOutputStream(mReplyStream);
+			// create the pipeline
+			mPipeline = new JabbaPipe();
+			while (true) {
+				String currentLine = null, strContentLength = null;
+				int datalength = 0;
+				String header = null;
+				try {
+					mSocket.setSoTimeout(0);
+					while (!bIn.ready())
+						Thread.sleep(1500);
+					currentLine = bIn.readLine();
+					StringTokenizer tokenizer = new StringTokenizer(currentLine);
+					String httpMethod = tokenizer.nextToken(); // "POST"
+					httpMethod = "POST";
+					if (httpMethod.equals("GET")) {
+						throw new RuntimeException("Unexpected GET request.");
+					} else if (!httpMethod.equals("POST")) {
+						throw new JabbaRuntimeException(String.format(
+								"Unexpected request method:  %s.", httpMethod),
+								405);
+					}
+
+					if (GlobalStuff.EmuV5Srvr()) {
+						header = "HTTP/1.1 200 OK";
+					} else {
+						header = currentLine; // "POST / HTTP/1.1" In HTTP 1.1,
+												// all connections are
+												// considered persistent unless
+												// declared otherwise.
+					}
+					header = header
+							.concat(System.getProperty("line.separator"));
+					mSocket.setSoTimeout(3000);
+					do {
+						// save http header for the v5 forward
+						try {
+							currentLine = bIn.readLine();
+							if (currentLine.indexOf("Content-Length:") != -1) {
+								strContentLength = currentLine.split(" ")[1];
+								datalength = Integer.parseInt(strContentLength);
+								currentLine = currentLine.concat(System
+										.getProperty("line.separator"));
+								currentLine = currentLine.replace(
+										strContentLength, "XXXLENXXX");
+								header = header.concat(currentLine);
+								// now read rest of header until blank line
+								do {
+									currentLine = bIn.readLine();
+									if (currentLine.isEmpty()) {
+										currentLine = currentLine.concat(System
+												.getProperty("line.separator"));
+										header = header.concat(currentLine);
+										break;
+									}
+									currentLine = currentLine.concat(System
+											.getProperty("line.separator"));
+									header = header.concat(currentLine);
+								} while (bIn.ready());
+							} else {
+								currentLine = currentLine.concat(System
+										.getProperty("line.separator"));
+								header = header.concat(currentLine);
+							}
+						} catch (SocketTimeoutException e) {
+							throw new JabbaRuntimeException(
+									"Time-out reading HTTP Header.", 408);
+						} catch (IOException e) {
+							logger.severe("IOException reading HTTP Header.");
+							reply = construct_http_header(417, 0);
+							dReply.writeBytes(reply);
+							throw new IOException(e);
+						}
+					} while (bIn.ready() && (datalength == 0)); // End of
+																// do-while
+					if (datalength > 0) {
+						cbuffer = new char[datalength];
+						int cbidx = 0;
+						int amount_expected = datalength;
+						int amount_read = 0;
+						try {
+							do {
+								amount_read = bIn.read(cbuffer, cbidx, amount_expected);
+								amount_expected = amount_expected - amount_read;
+								cbidx = cbidx + amount_read;
+							} while (amount_expected > 0);
+						} catch (SocketTimeoutException e) {
+							/*
+							 * if the request http is ok, but the responder's is
+							 * not, we should prob. return a 400 to the
+							 * requester, not the responder?? responder is not
+							 * waiting for anything back,is it?
+							 */
+							throw new JabbaRuntimeException(
+									String.format(
+											"Time-out reading HTTP Content: read %d bytes so far, expected another %d.",
+											amount_read, amount_expected), 408);
+						} catch (IOException e) {
+							throw new JabbaRuntimeException(
+									"IOException reading HTTP Content.", 411);
+						}
+						/*
+						String xmlInData2 = new String(cbuffer).substring(0, datalength);
+						int idx = xmlInData2.indexOf("<");
+						System.out.println("\nIndex is at: " + idx );
+						xmlInData = xmlInData2.substring(idx);*/
+						xmlInData = new String(cbuffer).substring(0, datalength);
+						if (iDebug >= 1) {
+							GlobalStuff.clearConsole();
+							if (mIsRequestForwarder) {
+								/*
+								 * if( true ) { File file = new
+								 * File("/home/carl/MS_DATA.bin");
+								 * FileOutputStream fop = new
+								 * FileOutputStream(file); // get the content in
+								 * bytes byte[] contentInBytes =
+								 * xmlInData.getBytes();
+								 * fop.write(contentInBytes); fop.flush();
+								 * fop.close(); }
+								 */
+								System.out
+										.println("Received "
+												+ datalength
+												+ " content bytes: "
+												+ header
+												+ xmlInData
+												+ " ***** from Request Client. *****\n");
+							} else
+								System.out
+										.println("Received "
+												+ datalength
+												+ " content bytes: "
+												+ header
+												+ xmlInData
+												+ " ##### from Response Server. #####\n");
+							Thread.sleep(1500);
+						}
+					} else {
+						throw new JabbaRuntimeException(
+								"Failed to Get Data Length.", 411);
+					}
+				} catch (JabbaRuntimeException e) {
+					reply = construct_http_header(e.getStatus(), 0);
+					dReply.writeBytes(reply);
+					logger.severe(String.format("%s: %s", e.getMessage(),
+							getStackTrace(e)));
+					// remove any remaining bytes from the request/response
+					do {
+						bIn.readLine();
+					} while (bIn.ready());
+					continue;
+				} catch (Exception e) {
+					reply = construct_http_header(417, 0);
+					dReply.writeBytes(reply);
+					logger.severe(String.format("Exception Reading Socket: %s",
+							getStackTrace(e)));
+					continue;
+				}
+
+				try {
+					if (iDebug >= 1) {
+						if (mIsRequestForwarder)
+							System.out
+									.println("***** Validating Message for the Response Server. *****\n");
+						else
+							System.out
+									.println("##### Validating Message for the Request Client. #####\n");
+
+						if (GlobalStuff.getWait()) {
+							System.out
+									.println("press ENTER to forward message on...");
+							try {
+								System.in.read(); // wait for user input
+							} catch (IOException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						}
+					}
+
+					URL[] load = { new URL( "file://./lib/valid.jar"),  new URL( "file://./lib/commons-cli-1.3.1.jar"), new URL( "file://./lib/XMLConverters.jar") };
+					URLClassLoader ucl = URLClassLoader.newInstance(load);
+					ClassLoader cl = ucl;
+					Class<?> clv = cl.loadClass("pnl.valid.JValid");
+					Object obj = clv.newInstance();
+					JValid JVII = (JValid) obj;
+					JVII.init_xsds("./v3/SchemaExtracted");
+
+					boolean good = false;
+					try {
+						good = JVII.validate(xmlInData);
+						// good = true;
+					} catch (Exception ex) {
+					    good = false;
+System.out.println(ex.toString());
+						logger.severe(String.format(
+								"%s Exception Validating Data: %s, data:\n%s",
+								mId, ex.toString(), xmlInData));
+						logger.severe("JV.validate" + ex.toString());
+					}
+
+					if (good) {
+						if (mIsRequestForwarder) {
+							GlobalStuff.m_TotalRequests++;
+							logger.info(String
+									.format("Validated Request Successfully, total of %d out of %d have failed to validate.",
+											GlobalStuff.m_ReqValidateFailed, GlobalStuff.m_TotalRequests));
+						} else {
+							GlobalStuff.m_TotalResponses++;
+							logger.info(String
+									.format("Validated Response Successfully, total of %d out of %d have failed to validate.",
+											GlobalStuff.m_RespValidateFailed,
+											GlobalStuff.m_TotalResponses));
+						}
+						xmlOutData = null;
+						try {
+							xmlOutData = mPipeline.run(mXsltFile, xmlInData);
+						} catch (Exception ex) {
+							xmlOutData = null;
+							logger.severe("JT.translate" + ex.toString());
+						}
+
+						if (xmlOutData != null) {
+							if (mIsRequestForwarder) {
+								logger.info(String
+										.format("Translated Request Successfully, total of %d out of %d have failed to Translate.",
+												GlobalStuff.m_ReqTranslateFailed,
+												GlobalStuff.m_TotalRequests));
+							} else {
+								logger.info(String
+										.format("Translated Response Successfully, total of %d out of %d have failed to Translate.",
+												GlobalStuff.m_RespTranslateFailed,
+												GlobalStuff.m_TotalResponses));
+							}
+						} else {
+							if (mIsRequestForwarder) {
+								GlobalStuff.m_ReqTranslateFailed++;
+								logger.warning(String
+										.format("Failed to Translate Request, total of %d out of %d have failed to Translate.",
+												GlobalStuff.m_ReqTranslateFailed,
+												GlobalStuff.m_TotalRequests));
+							} else {
+								GlobalStuff.m_RespTranslateFailed++;
+								logger.warning(String
+										.format("Failed to Translate Response, total of %d out of %d have failed to Translate.",
+												GlobalStuff.m_RespTranslateFailed,
+												GlobalStuff.m_TotalResponses));
+							}
+							reply = construct_http_header(417, 0);
+							dReply.writeBytes(reply);
+							continue;
+						}
+					} else { // NOT good validate
+						if (mIsRequestForwarder) {
+							GlobalStuff.m_TotalRequests++;
+							GlobalStuff.m_ReqValidateFailed++;
+							logger.warning(String
+									.format("Failed to Validate Request, total of %d out of %d have failed to Validate.",
+											GlobalStuff.m_ReqValidateFailed, GlobalStuff.m_TotalRequests));
+						} else {
+							GlobalStuff.m_TotalResponses++;
+							GlobalStuff.m_RespValidateFailed++;
+							logger.warning(String
+									.format("Failed to Validate Response, total of %d out of %d have failed to Validate.",
+											GlobalStuff.m_RespValidateFailed,
+											GlobalStuff.m_TotalResponses));
+						}
+						reply = construct_http_header(417, 0);
+						dReply.writeBytes(reply);
+						continue;
+					}
+				} catch (Exception e) {
+					reply = construct_http_header(417, 0);
+					dReply.writeBytes(reply);
+					logger.severe(String.format(
+							"%s Exception Translating Data: %s, data:\n%s",
+							mId, e.toString(), xmlInData));
+					if (iDebug >= 2) {
+						try {
+							Thread.sleep(3000);
+						} catch (InterruptedException e2) {
+							e2.printStackTrace();
+						}
+					}
+					break;
+				}
+
+				int bdylen = xmlOutData.length();
+				strContentLength = Integer.toString(bdylen);
+				header = header.replace("XXXLENXXX", strContentLength);
+				int hdrlen = header.length();
+				datalength = hdrlen + bdylen;
+				buffer = new byte[datalength];
+				System.arraycopy(header.getBytes(), 0, buffer, 0, hdrlen);
+				System.arraycopy(xmlOutData.getBytes(), 0, buffer, hdrlen,
+						bdylen);
+
+				if (mIsRequestForwarder) {
+					if (iDebug >= 3) {
+						String bufferString = new String(buffer);
+						System.out.println(mId + "\n****Forwarding: "
+								+ datalength + " bytes: " + bufferString
+								+ " ***** to Server. *****\n");
+					}
+					if (iDebug >= 1) {
+						System.out
+								.println("Waiting for Response From Server...\n");
+					}
+				} else {
+					if (iDebug >= 3) {
+						String bufferString = new String(buffer);
+						System.out.println(mId + "\n****Forwarding: "
+								+ datalength + " bytes:\n" + bufferString
+								+ " ##### to Requester. #####\n");
+					}
+					if (iDebug >= 2)
+						System.out.println("Waiting for new Request...\n");
+				}
+				dOut.write(buffer); // write the message
+				try {
+					if (iDebug >= 1) {
+						Thread.sleep(2000);
+						GlobalStuff.clearConsole();
+					}
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			} // while not broken
+		} catch (IOException e) {
+			;// Read/write failed --> connection is broken
+		}
+		// Notify parent thread that the connection is broken
+		mReqParent.connectionBroken(mId);
+	}
+
+	// ////////////////
+	public static String getStackTrace(Throwable t) {
+		StringWriter sw = new StringWriter();
+		t.printStackTrace(new PrintWriter(sw));
+		return sw.toString();
+	}
+
+	// this method makes the HTTP header for the response
+	// the headers job is to tell the caller the result of the request
+	// among if it was successful or not.
+	/*
+	 * 200's are used for successful requests. 300's are for redirections. 400's
+	 * are used if there was a problem with the request. 500's are used if there
+	 * was a problem with the server.
+	 */
+	private String construct_http_header(int return_code, int file_type) {
+		String s = "HTTP/1.1 ";
+		switch (return_code) {
+		case 100:
+			s = s + "100 Continue";
+			break;
+		case 101:
+			s = s + "101 Switching Protocols";
+			break;
+		case 102:
+			s = s + "102 Processing";
+			break;
+		case 200:
+			s = s + "200 OK";
+			break;
+		case 201:
+			s = s + "201 Created";
+			break;
+		case 202:
+			s = s + "202 Accepted";
+			break;
+		case 203:
+			s = s + "203 Non-Authoritative Information";
+			break;
+		case 204:
+			s = s + "204 No Content";
+			break;
+		case 205:
+			s = s + "205 Reset Content";
+			break;
+		case 206:
+			s = s + "206 Partial Content";
+			break;
+		case 207:
+			s = s + "207 Multi-Status";
+			break;
+		case 208:
+			s = s + "208 Already Reported";
+			break;
+		case 226:
+			s = s + "226 IM Used";
+			break;
+		case 300:
+			s = s + "300 Multiple Choices";
+			break;
+		case 301:
+			s = s + "301 Moved Permanently";
+			break;
+		case 302:
+			s = s + "302 Found";
+			break;
+		case 303:
+			s = s + "303 See Other";
+			break;
+		case 304:
+			s = s + "304 Not Modified";
+			break;
+		case 305:
+			s = s + "305 Use Proxy";
+			break;
+		case 307:
+			s = s + "307 Temporary Redirect";
+			break;
+		case 308:
+			s = s + "308 Permanent Redirect";
+			break;
+		case 400:
+			s = s + "400 Bad Request";
+			break;
+		case 401:
+			s = s + "401 Unauthorized";
+			break;
+		case 402:
+			s = s + "402 Payment Required";
+			break;
+		case 403:
+			s = s + "403 Forbidden";
+			break;
+		case 404:
+			s = s + "404 Not Found";
+			break;
+		case 405:
+			s = s + "405 Method Not Allowed";
+			break;
+		case 406:
+			s = s + "406 Not Acceptable";
+			break;
+		case 407:
+			s = s + "407 Proxy Authentication Required";
+			break;
+		case 408:
+			s = s + "408 Request Timeout";
+			break;
+		case 409:
+			s = s + "409 Conflict";
+			break;
+		case 410:
+			s = s + "410 Gone";
+			break;
+		case 411:
+			s = s + "411 Length Required";
+			break;
+		case 412:
+			s = s + "412 Precondition Failed";
+			break;
+		case 413:
+			s = s + "413 Payload Too Large";
+			break;
+		case 414:
+			s = s + "414 URI Too Long";
+			break;
+		case 415:
+			s = s + "415 Unsupported Media Type";
+			break;
+		case 416:
+			s = s + "416 Range Not Satisfiable";
+			break;
+		case 417:
+			s = s + "417 Expectation Failed";
+			break;
+		case 421:
+			s = s + "421 Misdirected Request";
+			break;
+		case 422:
+			s = s + "422 Unprocessable Entity";
+			break;
+		case 423:
+			s = s + "423 Locked";
+			break;
+		case 424:
+			s = s + "424 Failed Dependency";
+			break;
+		case 426:
+			s = s + "426 Upgrade Required";
+			break;
+		case 428:
+			s = s + "428 Precondition Required";
+			break;
+		case 429:
+			s = s + "429 Too Many Requests";
+			break;
+		case 431:
+			s = s + "431 Request Header Fields Too Large";
+			break;
+		case 451:
+			s = s + "451 Unavailable For Legal Reasons";
+			break;
+		case 500:
+			s = s + "500 Internal Server Error";
+			break;
+		case 501:
+			s = s + "501 Not Implemented";
+			break;
+		case 502:
+			s = s + "502 Bad Gateway";
+			break;
+		case 503:
+			s = s + "503 Service Unavailable";
+			break;
+		case 504:
+			s = s + "504 Gateway Timeout";
+			break;
+		case 505:
+			s = s + "505 HTTP Version Not Supported";
+			break;
+		case 506:
+			s = s + "506 Variant Also Negotiates";
+			break;
+		case 507:
+			s = s + "507 Insufficient Storage";
+			break;
+		case 508:
+			s = s + "508 Loop Detected";
+			break;
+		case 510:
+			s = s + "510 Not Extended";
+			break;
+		case 511:
+			s = s + "511 Network Authentication Required";
+			break;
+		}
+
+		s = s + "\r\n"; // other header fields,
+		// s = s + "Connection: close\r\n"; // can't handle persistent
+		// connections
+		s = s + "Connection: keep-alive\r\n"; // can handle persistent
+												// connections
+		s = s + "Server: JabbaTranslator \r\n"; // server name
+
+		switch (file_type) {
+		case 0:
+			break;
+		case 1:
+			s = s + "Content-Type: image/jpeg\r\n";
+			break;
+		case 2:
+			s = s + "Content-Type: image/gif\r\n";
+		case 3:
+			s = s + "Content-Type: application/x-zip-compressed\r\n";
+		default:
+			s = s + "Content-Type: text/html\r\n";
+			break;
+		}
+		// if you are missing the Content-Length header on your HTTP response,
+		// the HTTP client does not know
+		// when the response is complete, so it keeps on waiting for more
+		s = s + "Content-Length : 0\r\n";
+		s = s + "\r\n"; // this marks the end of the httpheader
+		// and the start of the body
+		return s;
+	}
+	/*
+     * 
+     */
+}
