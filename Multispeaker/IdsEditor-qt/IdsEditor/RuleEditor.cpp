@@ -27,7 +27,7 @@ RuleEditor::RuleEditor(const RuleSection& ruleSection, QWidget* parent)
   ui.setupUi(this);
 
   RestoreGeometry();
-  
+
   ui.BottomFrame->setVisible(true);
   ui.IniPlainTextEdit->setVisible(false);
   ui.MaxRequestsFrame->setVisible(false);
@@ -271,6 +271,11 @@ void RuleEditor::OnMaxRequestsToggled(bool checked)
 //
 void RuleEditor::OnMaxTempChanged(int value)
 {
+  if (value < ui.MinTempSlider->value() || value < ui.MinTempSpin->value())
+  {
+    ui.MinTempSlider->setValue(value);
+    ui.MinTempSpin->setValue(value);
+  }
   m_ruleSection.Rules.value(RULE_TYPE_TEMP_RANGE)->KeyValue.insert(RULE_KEY_MAXTEMP, QString::number(value));
   UpdateUi();
 }
@@ -279,6 +284,11 @@ void RuleEditor::OnMaxTempChanged(int value)
 //
 void RuleEditor::OnMaxTimeChanged(int value)
 {
+  if (value < ui.MinTimeSlider->value() || value < ui.MinTimeSpin->value())
+  {
+    ui.MinTimeSlider->setValue(value);
+    ui.MinTimeSpin->setValue(value);
+  }
   m_ruleSection.Rules.value(RULE_TYPE_TIME_RANGE)->KeyValue.insert(RULE_KEY_MAXTIME, QString::number(value));
   UpdateUi();
 }
@@ -298,6 +308,11 @@ void RuleEditor::OnMethodComboChanged(int index)
 //
 void RuleEditor::OnMinTempChanged(int value)
 {
+  if (value > ui.MaxTempSlider->value() || value > ui.MaxTempSpin->value())
+  {
+    ui.MaxTempSlider->setValue(value);
+    ui.MaxTempSpin->setValue(value);
+  }
   m_ruleSection.Rules.value(RULE_TYPE_TEMP_RANGE)->KeyValue.insert(RULE_KEY_MINTEMP, QString::number(value));
   UpdateUi();
 }
@@ -306,6 +321,11 @@ void RuleEditor::OnMinTempChanged(int value)
 //
 void RuleEditor::OnMinTimeChanged(int value)
 {
+  if (value > ui.MaxTimeSlider->value() || value > ui.MaxTimeSpin->value())
+  {
+    ui.MaxTimeSlider->setValue(value);
+    ui.MaxTimeSpin->setValue(value);
+  }
   m_ruleSection.Rules.value(RULE_TYPE_TIME_RANGE)->KeyValue.insert(RULE_KEY_MINTIME, QString::number(value));
   UpdateUi();
 }

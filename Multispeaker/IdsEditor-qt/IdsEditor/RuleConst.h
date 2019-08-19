@@ -30,9 +30,9 @@ const QString RULE_TYPE_TIME_RANGE = QStringLiteral("TimeRange");
 
 // Rule Keys
 const QString RULE_KEY_MAXTEMP = QStringLiteral("maxTemp");
-const QString RULE_KEY_MAXTIME = QStringLiteral("maxTime");
+const QString RULE_KEY_MAXTIME = QStringLiteral("maxHour");
 const QString RULE_KEY_MINTEMP = QStringLiteral("minTemp");
-const QString RULE_KEY_MINTIME = QStringLiteral("minTime");
+const QString RULE_KEY_MINTIME = QStringLiteral("minHour");
 const QString RULE_KEY_NUMREQ = QStringLiteral("numReq");
 
 // Functions
