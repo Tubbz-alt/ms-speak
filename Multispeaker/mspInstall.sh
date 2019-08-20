@@ -1,4 +1,4 @@
-#!/bin/bash -x -e
+#!/bin/sh -x -e
 #   -x runs in debug mode, -e exits if any command fails
 #  retrieve this file from the repository:
 #		wget https://raw.githubusercontent.com/pnnl/ms-speak/Phase2/Multispeaker/mspInstall.sh
