@@ -19,7 +19,7 @@ If the methods don't show up in the 'Methods' column in the right, then click on
 Select the function from the left 'Function Blocks' column. Here we have selected 'CD Connect / Disconnect'. Click the appropriate method from the 'Methods' column in the right (here we have clicked on 'InitateConnectDisconnect') in order to edit the timeline and event. 
 ![](images/MultiSpeaker.png)
 
-![] (images/EditTimeLineEvent.png)
+![](images/EditTimeLineEvent.png)
 
 
 ### MultiSpeakerServer
