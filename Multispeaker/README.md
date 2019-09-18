@@ -25,7 +25,7 @@ Select the function from the left 'Function Blocks' column (here we have selecte
 
 ### MultiSpeakerServer
 
-The MultiSPeakerServer listens for MultiSpeak messages and receives messages. 
+The MultiSPeakerServer listens for MultiSpeak messages, and receives them. 
 
 Once the application opens, you can find the icon in the Windows Taskbar, next to MobaXterm: ![](images/TaskbarMultiSpeakerServer.png)
 ![](images/MultiSpeakerServer.png)
@@ -38,7 +38,7 @@ Set up the HTTP IP and port address.
 PNNL has developed an open-source intrusion detection system (IDS) for MultiSpeak interfaces. The IdsEditor is the interface that is used to configure business rules. 
 It is possible to add, edit or delete business rules. The existing business rule editor serves as a simple example where it is possible to add acceptable temperature range, time range in a day, and number of maximum requests in a day. It is also possible to select the method, and endpoints.
 
-Once the application is opened, you can find the icon in the Windows Taskbar, next to MobaXterm: ![](images/TaskbarIdsEditor.png)
+Once the application opens, you can find the icon in the Windows Taskbar, next to MobaXterm: ![](images/TaskbarIdsEditor.png)
 
 Click on edit to be able to change the business rules.
 ![](images/IdsEditor.png)
