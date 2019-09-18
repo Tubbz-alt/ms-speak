@@ -2,12 +2,6 @@
 
 This is a toolkit for generating test messages in [MultiSpeak](http://multispeak.org).
 
-### MultiSpeakerServer
-
-Receives messages. In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarMultiSpeakerServer.png)
-
-![](images/MultiSpeakerServer.png)
-
 ### MultiSpeaker
 
 Sends messages. In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarMultiSpeaker.png)
@@ -23,6 +17,13 @@ Sends messages. In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarMul
 ![](images/MultiSpeakerProxy.png)
 
 ![](images/MultiSpeakerHTTP.png)
+
+### MultiSpeakerServer
+
+Receives messages. In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarMultiSpeakerServer.png)
+
+![](images/MultiSpeakerServer.png)
+
 
 ### IdsEditor
 
