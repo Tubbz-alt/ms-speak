@@ -1,11 +1,12 @@
-# MultiSpeaker
-
-MultiSpeaker is a toolkit for generating test messages in [MultiSpeak](http://multispeak.org).
+# MS-SPEAK Toolkit
+The MS-SPEAK toolkit consists of three Qt-based components - MultiSpeaker (endpoint), MultiSpeakerServer (listener), and IdsEditor (business rule editor for the Intrusion Detection System built specifically to monitor MultiSpeak interfaces).
 
 
 ### MultiSpeaker
+MultiSpeaker is a toolkit for generating test messages in [MultiSpeak](http://multispeak.org).
 
-Sends messages. In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarMultiSpeaker.png)
+Sends messages. In the Windows Taskbar, next to MobaXterm: 
+![](images/TaskbarMultiSpeaker.png)
 
 The interface of MultiSPeaker with 'Function Blocks' in the left, 'Methods' in the right, and dedicated spaces in the middle for specifying 'Topology', 'Timeline' and 'Events'. 
 ![](images/MultiSpeakerOpening.png)
@@ -32,8 +33,11 @@ Set up the HTTP IP and port address.
 
 
 ### IdsEditor
+PNNL has decveloped an open-source intrusion detection system (IDS) for MultiSpeak interfaces. The IdsEditor is used to configure business rules. 
+It is possible to add, edit or delete business rules. The existing business rule editor serves as a simple example where it is possible to add temperature range, time range in a day, and number of maximum requests in a day. It is also possible to select the method, and endpoints.
 
-Used to configure business rules. In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarIdsEditor.png)
+
+In the Windows Taskbar, next to MobaXterm: ![](images/TaskbarIdsEditor.png)
 ![](images/IdsEditor.png)
 Click on edit to be able to change the business rules.
 
