@@ -1,8 +1,11 @@
 # MS-SPEAK Toolkit
 The MS-SPEAK toolkit consists of three Qt-based components - MultiSpeaker (endpoint), MultiSpeakerServer (listener), and IdsEditor (business rule editor for the Intrusion Detection System built to secure MultiSpeak interfaces).
 
+### Cloud-Based Test Platform
+Participants in the MS-SPEAK project have credentials to use a cloud-based
+test platform shown in: [Tutorial Video](videos/MS-SPEAK-on-Azure.mp4)
 
-### MultiSpeaker
+### MultiSpeaker Instructions
 MultiSpeaker is a toolkit for generating and sending test messages in [MultiSpeak](http://multispeak.org).
 
 Once the application opens, you can find it in the Windows Taskbar, next to MobaXterm: 
@@ -23,7 +26,7 @@ Select the function from the left 'Function Blocks' column (here we have selecte
 ![](images/EditTimeLineEvent.png)
 
 
-### MultiSpeakerServer
+### MultiSpeakerServer Instructions
 
 The MultiSPeakerServer listens for MultiSpeak messages, and receives them. 
 
@@ -34,7 +37,7 @@ Set up the HTTP IP and port address.
 ![](images/MultiSpeakerHTTP.png)
 
 
-### IdsEditor
+### IdsEditor Instructions
 PNNL has developed an open-source intrusion detection system (IDS) for MultiSpeak interfaces. The IdsEditor is the interface that is used to configure business rules. 
 It is possible to add, edit or delete business rules. The existing business rule editor serves as a simple example where it is possible to add acceptable temperature range, time range in a day, and number of maximum requests in a day. It is also possible to select the method, and endpoints.
 
